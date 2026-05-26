@@ -1,5 +1,6 @@
 import express from "express";
 import cron    from "node-cron";
+import { createContextMiddleware } from "@ctxprotocol/sdk";
 import { ENV }  from "./env.js";
 import { COUNTRIES, type Country } from "./types.js";
 import { getAllCurves, getYieldCurve } from "./fetchers/index.js";
@@ -245,7 +246,7 @@ function interpretSpreads(curve: ReturnType<typeof Object.create>): string {
 }
 
 // ── MCP JSON-RPC endpoint ──────────────────────────────────────────────────
-app.post("/mcp", async (req, res) => {
+app.post("/mcp", createContextMiddleware(), async (req, res) => {
   const { jsonrpc, method, id, params } = req.body ?? {};
 
   if (jsonrpc !== "2.0") {
@@ -269,8 +270,9 @@ app.post("/mcp", async (req, res) => {
     }
 
     if (method === "tools/call") {
-      const { name, arguments: args } = params ?? {};
-      const result = await callTool(name, args ?? {});
+      const p    = (params ?? {}) as { name?: string; arguments?: Record<string, unknown> };
+      const { name, arguments: args } = p;
+      const result = await callTool(name ?? "", args ?? {});
       return res.json({
         jsonrpc: "2.0", id,
         result: {
