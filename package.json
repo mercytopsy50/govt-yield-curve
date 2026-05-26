@@ -1,0 +1,26 @@
+{
+  "name": "yield-curve-mcp",
+  "version": "1.0.0",
+  "description": "Multi-country sovereign yield curve data via MCP",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "@ctxprotocol/sdk": "^0.13.1",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.19",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0"
+  }
+}

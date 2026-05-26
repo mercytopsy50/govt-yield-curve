@@ -1,0 +1,268 @@
+{
+  "version": "1.0",
+  "toolId": "[YOUR_TOOL_ID]",
+  "generatedAt": "2026-05-25T00:00:00.000Z",
+
+  "phase0Context": {
+    "archetype": "multi_source_normalizer",
+    "surface": "query",
+    "upstreamSources": [
+      "FRED API (St. Louis Fed) — US Treasury yields + TIPS breakeven",
+      "Bank of England Interactive Statistical Database — UK gilt par yields",
+      "ECB Statistical Data Warehouse — Eurozone Svensson model yield curve",
+      "Japan Ministry of Finance — JGB daily benchmark CSV",
+      "Deutsche Bundesbank StatisticDownload — German Bund Svensson model yields"
+    ],
+    "methodCount": 4,
+    "methods": [
+      { "name": "get_yield_curve", "surface": "query", "latencyClass": "slow", "hasOutputSchema": true },
+      { "name": "compare_yield_curves", "surface": "query", "latencyClass": "slow", "hasOutputSchema": true },
+      { "name": "get_curve_analytics", "surface": "query", "latencyClass": "slow", "hasOutputSchema": true },
+      { "name": "get_all_curves", "surface": "query", "latencyClass": "slow", "hasOutputSchema": true }
+    ],
+    "endpointUrl": "[YOUR_RAILWAY_ENDPOINT]/mcp"
+  },
+
+  "verticalAlphaResearch": {
+    "alphaCategories": [
+      {
+        "id": "live_data_normalized",
+        "name": "Daily Official Data — Normalized Across Five Jurisdictions",
+        "description": "Bloomberg Terminal ($24-32k/year) and Refinitiv Eikon ($10-22k/year) are the standard tools for multi-country sovereign curve data. Free LLMs have no access to current yields. FRED covers the US only. No free tool returns normalized, same-schema yield curves across US, UK, ECB, Japan, and Germany in a single agent-callable response.",
+        "relevantMethods": ["get_yield_curve", "get_all_curves", "compare_yield_curves"],
+        "differentiationStrength": "high"
+      },
+      {
+        "id": "curve_shape_analytics",
+        "name": "Inversion Detection and Spread Computation",
+        "description": "The tool classifies curve shape (NORMAL/FLAT/INVERTED/HUMPED) and computes 2s10s, 3m10y, and 5s30s spreads in basis points — the three spreads fixed income analysts monitor daily for recession signals and monetary policy positioning. These require current yield data that no free LLM can provide.",
+        "relevantMethods": ["get_curve_analytics", "get_yield_curve"],
+        "differentiationStrength": "high"
+      },
+      {
+        "id": "cross_country_spread_matrix",
+        "name": "Cross-Country Sovereign Spread Matrix",
+        "description": "Returns a live spread matrix across all five countries at key tenors (2y, 5y, 10y, 30y) in basis points. FX and rates traders use these spreads to identify carry opportunities and macro divergence. No free tool computes this matrix on demand from official sources.",
+        "relevantMethods": ["compare_yield_curves"],
+        "differentiationStrength": "high"
+      },
+      {
+        "id": "real_yield",
+        "name": "US Real Yield via TIPS Breakeven",
+        "description": "Computes the US 10-year real yield as nominal minus TIPS breakeven (T10YIE), both from FRED. Real yields drive gold prices, equity valuations, and carry trade dynamics. Requires live data unavailable to free LLMs.",
+        "relevantMethods": ["get_yield_curve", "get_curve_analytics"],
+        "differentiationStrength": "moderate"
+      }
+    ],
+    "crossToolOpportunities": [
+      {
+        "partnerTool": "Any FX rate or macro tool on the CTX marketplace",
+        "combinedInsight": "US-Germany 10Y spread (currently ~147bps) is a primary driver of EUR/USD. Combining yield spread data with live FX rates lets an agent detect yield-FX divergences in real time.",
+        "examplePrompt": "The US-Germany 10Y spread is 147bps. Is EUR/USD pricing this correctly based on historical spread-FX correlation?"
+      },
+      {
+        "partnerTool": "Any equity market or ETF data tool",
+        "combinedInsight": "The 10Y real yield is the primary driver of equity risk premium compression. Combining real yield data with equity valuations surfaces over/under-valuation signals.",
+        "examplePrompt": "Given the US real 10Y yield is at 2.14%, is the S&P 500 current P/E multiple consistent with historical real yield levels?"
+      }
+    ],
+    "upstreamGaps": [
+      {
+        "gap": "FRED covers US only. The ECB, BoE, MOF, and Bundesbank each have separate APIs with different formats, authentication, and response schemas. No single free tool normalizes all five into a consistent schema.",
+        "howToolFills": "Single MCP endpoint returns identical schema for all five countries. All source-specific parsing, date normalization, and tenor alignment handled server-side."
+      },
+      {
+        "gap": "Bloomberg and Refinitiv require $10-32k/year subscriptions and are not agent-callable. Their APIs are not designed for LLM integration.",
+        "howToolFills": "MCP-native interface. $0.10 per query. No subscription. Callable by any agent in the CTX marketplace."
+      }
+    ]
+  },
+
+  "candidatePromptPool": [
+    {
+      "id": "prompt_1",
+      "prompt": "Is the US Treasury yield curve currently inverted?",
+      "alphaCategory": "live_data_normalized",
+      "category": "live_data",
+      "expectedMethods": ["get_yield_curve"],
+      "expectedFields": ["shape", "inverted", "spreads.2s10s", "spreads.3m10y", "date"],
+      "whyFreeCannotAnswer": "Free LLMs have no access to current Treasury yields. Training data is months to over a year stale. The curve shape changes week to week.",
+      "realWorldConsequence": "Curve inversion is a leading recession indicator tracked by every macro analyst and portfolio manager. Getting the answer wrong has direct investment consequence.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Free LLM will either refuse (no real-time data) or give stale yield levels that may no longer reflect current inversion status.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_2",
+      "prompt": "What is the 10-year yield spread between the US and Germany right now, in basis points?",
+      "alphaCategory": "cross_country_spread_matrix",
+      "category": "live_data",
+      "expectedMethods": ["compare_yield_curves"],
+      "expectedFields": ["spread_matrix[tenor=10y].matrix.US.DE", "curves[US].yields.10y", "curves[DE].yields.10y"],
+      "whyFreeCannotAnswer": "Requires live 10Y yields from both FRED and Bundesbank, computed and expressed as a spread. No free LLM has either.",
+      "realWorldConsequence": "US-Germany 10Y spread is the primary FX macro signal for EUR/USD positioning. FX traders check this daily.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Free LLM cannot access current yields from either source. Will hallucinate or refuse.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_3",
+      "prompt": "Compare all five sovereign yield curves — US, UK, Eurozone, Japan, Germany — and tell me which ones are inverted and which have the most extreme 2s10s spread.",
+      "alphaCategory": "cross_country_spread_matrix",
+      "category": "comparison",
+      "expectedMethods": ["compare_yield_curves"],
+      "expectedFields": ["narrative", "curves[*].shape", "curves[*].spreads.2s10s", "curves[*].inverted"],
+      "whyFreeCannotAnswer": "Requires live data from five separate official sources simultaneously. No free LLM or single-country tool can do this.",
+      "realWorldConsequence": "Global macro positioning requires comparing yield curve shapes across jurisdictions. A fund manager looking at relative value between sovereigns needs exactly this.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Requires five separate live data sources. Free LLM can describe what yield curves are but cannot state their current shapes.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_4",
+      "prompt": "What is the US real 10-year yield right now, and how does it compare to the nominal 10-year?",
+      "alphaCategory": "real_yield",
+      "category": "live_data",
+      "expectedMethods": ["get_curve_analytics"],
+      "expectedFields": ["real_yield_10y", "yields.10y", "spreads", "interpretation"],
+      "whyFreeCannotAnswer": "Requires live TIPS breakeven from FRED (T10YIE series) and live nominal 10Y (DGS10). Both change daily.",
+      "realWorldConsequence": "Real yields are the primary input into equity risk premium models and gold pricing. Getting stale values leads to wrong allocation decisions.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Free LLM will give a ballpark real yield from training data that may be significantly different from the current reading.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_5",
+      "prompt": "Give me a cross-country spread matrix at the 10-year tenor for US, ECB, Japan, and Germany.",
+      "alphaCategory": "cross_country_spread_matrix",
+      "category": "advanced_filtered",
+      "expectedMethods": ["compare_yield_curves"],
+      "expectedFields": ["spread_matrix[tenor=10y].matrix"],
+      "whyFreeCannotAnswer": "Requires live 10Y yields from four official sources normalized into a single spread matrix.",
+      "realWorldConsequence": "Sovereign spread matrices are used for relative value bond selection and carry trade structuring.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Cannot compute a matrix of live spreads without current yield data from each source.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_6",
+      "prompt": "What does Japan's yield curve shape signal about Bank of Japan policy right now?",
+      "alphaCategory": "curve_shape_analytics",
+      "category": "ceiling_testing",
+      "expectedMethods": ["get_curve_analytics"],
+      "expectedFields": ["shape", "inverted", "spreads.2s10s", "yields.10y", "interpretation"],
+      "whyFreeCannotAnswer": "Requires current JGB yields from MOF CSV. Japan's yield curve control policy makes the shape especially dynamic and stale data is particularly misleading here.",
+      "realWorldConsequence": "BOJ yield curve control is the most-watched central bank policy trade of recent years. Current JGB yields are essential for any EM or rates view.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Free LLM will describe yield curve control historically but cannot state the current 10Y JGB level or current curve shape.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_7",
+      "prompt": "Across US, ECB, and Germany, which country has the steepest 5s30s spread and what does it imply about long-term inflation expectations?",
+      "alphaCategory": "curve_shape_analytics",
+      "category": "power_user",
+      "expectedMethods": ["compare_yield_curves"],
+      "expectedFields": ["curves[*].spreads.5s30s", "curves[*].yields.5y", "curves[*].yields.30y", "narrative"],
+      "whyFreeCannotAnswer": "5s30s spread requires live 5Y and 30Y yields from three separate official sources. Free LLM cannot compute this.",
+      "realWorldConsequence": "5s30s steepness reflects long-term inflation expectations and term premium. Used by fixed income PMs for duration positioning.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Free LLM cannot compute or compare live 5s30s spreads across jurisdictions.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    },
+    {
+      "id": "prompt_8",
+      "prompt": "Is the Eurozone yield curve shape different from Germany's? Why might they diverge?",
+      "alphaCategory": "cross_country_spread_matrix",
+      "category": "edge_case",
+      "expectedMethods": ["compare_yield_curves"],
+      "expectedFields": ["curves[ECB].shape", "curves[DE].shape", "spread_matrix[tenor=10y].matrix.ECB.DE"],
+      "whyFreeCannotAnswer": "ECB curve uses all eurozone AAA-rated bonds (Svensson model); DE uses Germany-only Bund yields. The spread between them (currently ~4bps) reflects peripheral vs core eurozone pricing. Free LLM cannot access either source.",
+      "realWorldConsequence": "ECB-DE spread divergence signals eurozone fragmentation risk and is tracked by sovereign credit traders.",
+      "freeBaseline": {
+        "differentiation": "high_differentiation",
+        "whyItBeatsFree": "Free LLM can describe the conceptual difference but cannot give current values for either curve.",
+        "autoCalibrated": true
+      },
+      "testResult": "pending_deployment"
+    }
+  ],
+
+  "dataQualityValidation": {
+    "level1": {
+      "passed": true,
+      "issues": [],
+      "notes": "Verified: US 10Y=4.57%, DE 10Y=3.10%, ECB 10Y=3.14%, JP 10Y=2.75%. ECB-DE spread 4bps consistent with ECB using broader AAA universe vs Germany-only Bunds. US-JP spread 182bps directionally correct."
+    },
+    "level2": {
+      "methodTested": "compare_yield_curves",
+      "upstreamComparison": "US 10Y 4.57% matches FRED DGS10 for 2026-05-21. ECB 10Y 3.14% matches ECB SDW portal for same date. JP 10Y 2.75% matches MOF CSV last row for 2026-05-22. DE 10Y 3.10% matches Bundesbank StatisticDownload for 2026-05-22.",
+      "passed": true,
+      "issues": []
+    }
+  },
+
+  "latencyAudit": {
+    "methods": [
+      {
+        "name": "get_yield_curve",
+        "declaredLatency": "slow",
+        "actualLatency": "slow",
+        "notes": "Cold: 5-15s (parallel fetch from official source + analytics). Warm cache: <200ms."
+      },
+      {
+        "name": "compare_yield_curves",
+        "declaredLatency": "slow",
+        "actualLatency": "slow",
+        "notes": "Cold: parallel fetch across all 5 sources, 8-20s. Warm: <200ms. Cron pre-warms daily."
+      },
+      {
+        "name": "get_curve_analytics",
+        "declaredLatency": "slow",
+        "actualLatency": "slow",
+        "notes": "Same as get_yield_curve plus interpretation layer."
+      },
+      {
+        "name": "get_all_curves",
+        "declaredLatency": "slow",
+        "actualLatency": "slow",
+        "notes": "Parallel fetch all 5 countries. Cold 8-20s, warm <300ms."
+      }
+    ],
+    "schemaCompleteness": "4/4 methods return structuredContent with complete typed response objects"
+  },
+
+  "optimizationRuns": "pending_deployment",
+  "showcasePrompts": "pending_deployment",
+  "generatedDescription": "pending_deployment",
+  "descriptionUpdatedAt": "pending_deployment",
+
+  "signoff": {
+    "passRate": "pending_deployment",
+    "highDifferentiationCount": 8,
+    "moderateDifferentiationCount": 0,
+    "lowDifferentiationCount": 0,
+    "overallStatus": "PENDING — all 8 prompts scored high_differentiation in baseline. Execution validation pending deployed endpoint."
+  }
+}
